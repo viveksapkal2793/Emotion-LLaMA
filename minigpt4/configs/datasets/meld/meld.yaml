@@ -1,0 +1,6 @@
+datasets:
+  meld_caption:
+    data_type: images
+    build_info:
+      ann_path: "D://Acads//BTP//MELD//MELD.Raw//test_sent_emo.csv"
+      image_path: "D://Acads//BTP//MELD//MELD.Raw//output_repeated_splits_test"

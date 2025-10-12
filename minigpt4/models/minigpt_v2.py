@@ -114,6 +114,44 @@ class MiniGPTv2(MiniGPTBase):
 
             atts_llama = torch.ones(inputs_llama.size()[:-1], dtype=torch.long).to(image.device)    
         return inputs_llama, atts_llama
+    
+    def encode_img_with_preextracted_eva(self, eva_features, video_features):
+        """
+        Process pre-extracted EVA-ViT features instead of raw images
+        
+        Args:
+            eva_features: [B, 1025, 1408] - Pre-extracted EVA-ViT features
+            video_features: [B, 3, 1024] - Other multimodal features
+        """
+        device = eva_features.device
+        
+        with self.maybe_autocast():
+            # Skip visual_encoder, use pre-extracted EVA features directly
+            image_embeds = self.ln_vision(eva_features).to(device)   # [B, 1025, 1408]
+            
+            # CLS token processing  
+            image_cls_tk = image_embeds[:, :1, :]       # [B, 1, 1408]
+            cls_tk_feats = self.cls_tk_llama_proj(image_cls_tk)    # [B, 1, 4096]
+            
+            # Patch tokens processing
+            image_embeds = image_embeds[:, 1:, :]       # [B, 1024, 1408] 
+            bs, pn, hs = image_embeds.shape             
+            image_embeds = image_embeds.view(bs, int(pn / 4), int(hs * 4))  # [B, 256, 5632]
+            image_inputs_llama = self.llama_proj(image_embeds)    # [B, 256, 4096]
+            
+            # Process other multimodal features (same as original)
+            video_features = video_features.to(device)   # [B, 3, 1024]
+            video_features_split = torch.split(video_features, 1, dim=1)
+            output1 = self.feats_llama_proj1(video_features_split[0].squeeze(1))  # [B, 4096]
+            output2 = self.feats_llama_proj2(video_features_split[1].squeeze(1))  # [B, 4096] 
+            output3 = self.feats_llama_proj3(video_features_split[2].squeeze(1))  # [B, 4096]
+            video_feats = torch.stack([output1, output2, output3], dim=1)         # [B, 3, 4096]
+            
+            # Combine all features
+            inputs_llama = torch.cat((image_inputs_llama, video_feats, cls_tk_feats), dim=1)  # [B, 260, 4096]
+            atts_llama = torch.ones(inputs_llama.size()[:-1], dtype=torch.long).to(device)   # [B, 260]
+            
+        return inputs_llama, atts_llama
 
     @classmethod
     def from_config(cls, cfg):

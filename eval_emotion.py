@@ -17,6 +17,7 @@ from minigpt4.common.registry import registry
 
 from minigpt4.datasets.datasets.first_face import FeatureFaceDataset
 from minigpt4.datasets.datasets.mer2024 import MER2024Dataset
+from minigpt4.datasets.datasets.meld import MELDDataset
 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 from minigpt4.datasets.data_utils import prepare_sample
@@ -159,5 +160,64 @@ if 'mer2024_caption' in args.dataset:
     cm = confusion_matrix(targets_list, answers_list)
     print(cm)
 
+if 'meld_caption' in args.dataset:
+    eval_file_path = cfg.evaluation_datasets_cfg["meld_caption"]["eval_file_path"]
+    img_path = cfg.evaluation_datasets_cfg["meld_caption"]["img_path"]
+    batch_size = cfg.evaluation_datasets_cfg["meld_caption"]["batch_size"]
+    max_new_tokens = cfg.evaluation_datasets_cfg["meld_caption"]["max_new_tokens"]
+    print("MELD eval_file_path:", eval_file_path)
+    print("MELD img_path:", img_path)
+    print("MELD batch_size:", batch_size)
+    print("MELD max_new_tokens:", max_new_tokens)
+
+    data = MELDDataset(vis_processor, text_processor, img_path, eval_file_path)
+    eval_dataloader = DataLoader(data, batch_size=batch_size, shuffle=False)
+
+    targets_list = []  
+    answers_list = [] 
+    names_list   = []
+    for batch in eval_dataloader:
+        # MELD uses pre-extracted EVA features, not raw images
+        eva_features = batch['eva_features']
+        instruction_input = batch['instruction_input']
+        targets = batch['answer']
+        video_features = batch['video_features']
+
+        texts = prepare_texts(instruction_input, conv_temp)
+        
+        # Need to modify model.generate to handle pre-extracted EVA features
+        # For now, we'll pass eva_features as a special parameter
+        # This requires model modification (see below)
+        answers = model.generate_with_eva_features(eva_features, video_features, texts, 
+                                                 max_new_tokens=max_new_tokens, do_sample=False)
+        
+        for j in range(len(answers)):
+            answers[j] = answers[j].split(" ")[-1]
+            targets[j] = targets[j].split(" ")[-1]
+            # MELD emotions: neutral, anger, joy, sadness, fear, surprise, disgust
+            if answers[j] not in ['neutral', 'anger', 'joy', 'sadness', 'fear', 'surprise', 'disgust']:
+                print("MELD Error: ", answers[j], " Target:", targets[j])
+                answers[j] = 'neutral'  # Default to neutral for invalid predictions
+        
+        targets_list.extend(targets)  
+        answers_list.extend(answers)
+        names_list.extend(batch['image_id'])
+
+    accuracy = accuracy_score(targets_list, answers_list)
+    precision = precision_score(targets_list, answers_list, average='weighted')
+    recall = recall_score(targets_list, answers_list, average='weighted')
+    f1 = f1_score(targets_list, answers_list, average='weighted')
+
+    print("MELD Results:")
+    print("Accuracy:", accuracy)
+    print("Precision:", precision)
+    print("Recall:", recall)
+    print("F1 Score:", f1)
+
+    cm = confusion_matrix(targets_list, answers_list)
+    print("MELD Confusion Matrix:")
+    print(cm)
+
 # torchrun  --nproc_per_node 1 eval_emotion.py --cfg-path eval_configs/eval_emotion.yaml --dataset feature_face_caption
 # torchrun  --nproc_per_node 1 eval_emotion.py --cfg-path eval_configs/eval_emotion.yaml --dataset mer2024_caption
+# torchrun --nproc_per_node 1 eval_emotion.py --cfg-path eval_configs/eval_emotion.yaml --dataset meld_caption

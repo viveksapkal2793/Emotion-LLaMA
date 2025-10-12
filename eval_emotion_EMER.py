@@ -16,6 +16,7 @@ from minigpt4.conversation.conversation import CONV_VISION_minigptv2
 from minigpt4.common.registry import registry
 
 from minigpt4.datasets.datasets.first_face import FeatureFaceDataset
+from minigpt4.datasets.datasets.meld import MELDDataset
 
 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score, confusion_matrix
 from minigpt4.datasets.data_utils import prepare_sample
@@ -95,3 +96,49 @@ if 'feature_face_caption' in args.dataset:
             writer.writerow([name, answer])
 
     print(f"Save: {output_file}")
+
+if 'meld_caption' in args.dataset:
+    eval_file_path = cfg.evaluation_datasets_cfg["meld_caption"]["eval_file_path"]
+    img_path = cfg.evaluation_datasets_cfg["meld_caption"]["img_path"]
+    batch_size = cfg.evaluation_datasets_cfg["meld_caption"]["batch_size"]
+    max_new_tokens = cfg.evaluation_datasets_cfg["meld_caption"]["max_new_tokens"]
+    print("MELD eval_file_path:", eval_file_path)
+    print("MELD img_path:", img_path)
+    print("MELD batch_size:", batch_size)
+    print("MELD max_new_tokens:", max_new_tokens)
+
+    data = MELDDataset(vis_processor, text_processor, img_path, eval_file_path)
+    eval_dataloader = DataLoader(data, batch_size=batch_size, shuffle=False)
+
+    targets_list = []  
+    answers_list = [] 
+    names_list   = []
+    for batch in eval_dataloader:
+        # MELD uses pre-extracted EVA features, not raw images
+        eva_features = batch['eva_features']
+        instruction_input = batch['instruction_input']
+        targets = batch['answer']
+        video_features = batch['video_features']
+
+        texts = prepare_texts(instruction_input, conv_temp)
+        
+        # Use pre-extracted EVA features
+        answers = model.generate_with_eva_features(eva_features, video_features, texts, 
+                                                 max_new_tokens=max_new_tokens, do_sample=False)
+        
+        print("MELD id:", batch['image_id'])
+        print("MELD answers:", answers)
+        
+        targets_list.extend(targets)  
+        answers_list.extend(answers)
+        names_list.extend(batch['image_id'])
+
+    output_file = '/home/czb/project/Emotion-LLaMA/checkpoints/save_checkpoint/2024xxxx-v2/result/output_Emotion-LLaMA_meld.csv'
+
+    with open(output_file, mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(['names', 'chi_reasons'])
+        for name, answer in zip(names_list, answers_list):
+            writer.writerow([name, answer])
+
+    print(f"MELD results saved: {output_file}")

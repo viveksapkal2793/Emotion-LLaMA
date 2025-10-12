@@ -11,7 +11,8 @@ model:
   # generation configs
   prompt: ""
 
-  llama_model: "/home/user/project/Emotion-LLaMA/checkpoints/Llama-2-7b-chat-hf"
+  # llama_model: "/home/user/project/Emotion-LLaMA/checkpoints/Llama-2-7b-chat-hf"
+  llama_model: "D:\\Acads\\BTP\\Emotion-LLaMA\\checkpoints\\Llama-2-7b-chat-hf"  # CHANGE: Windows path
   lora_r: 64
   lora_alpha: 16
 

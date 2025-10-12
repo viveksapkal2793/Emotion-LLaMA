@@ -291,6 +291,10 @@ class MiniGPTBase(BaseModel):
         if 'image' in samples:
             # img_embeds, img_atts = self.encode_img(samples["image"])
             img_embeds, img_atts = self.encode_img(samples["image"], samples["video_features"]) 
+        elif 'eva_features' in samples:
+            # NEW: use pre-extracted EVA features (for MELD)
+            img_embeds, img_atts = self.encode_img_with_preextracted_eva(
+                samples["eva_features"], samples["video_features"])
         else:
             img_embeds = img_atts = None
 
@@ -321,7 +325,7 @@ class MiniGPTBase(BaseModel):
             if 'length' in samples:
                 # the input is a image train (like videos)
                 bsz, pn, hs = img_embeds.shape
-                img_embeds = img_embeds.reshape(len(samples['image']), -1, pn, hs)
+                img_embeds = img_embeds.reshape(len(samples.get('image', samples.get('eva_features'))), -1, pn, hs)
                 cond_embeds, cond_atts = self.prompt_wrap(img_embeds, img_atts, instruction, samples['length'])
             else:
                 cond_embeds, cond_atts = self.prompt_wrap(img_embeds, img_atts, instruction)
@@ -490,6 +494,76 @@ class MiniGPTBase(BaseModel):
         #         do_sample=do_sample,
         #         # stopping_criteria=stopping_criteria,
         #     )
+        answers = []
+        for output_token in outputs:
+            if output_token[0] == 0:
+                output_token = output_token[1:]
+            output_texts = self.llama_tokenizer.decode(output_token, skip_special_tokens=True)
+            output_texts = output_texts.split('</s>')[0]  # remove the stop sign </s>
+            output_texts = output_texts.replace("<s>", "")
+            output_texts = output_texts.split(r'[/INST]')[-1].strip()
+            answers.append(output_texts)
+
+        return answers
+    
+    @torch.no_grad()
+    def generate_with_eva_features(
+        self,
+        eva_features,
+        video_features,
+        texts,
+        num_beams=1,
+        max_new_tokens=20,
+        min_length=1,
+        top_p=0.9,
+        repetition_penalty=1,
+        length_penalty=1,
+        temperature=1,
+        do_sample=False,
+        stop_words_ids=[2],
+    ):
+        '''
+        Generate function using pre-extracted EVA features
+        '''
+        
+        stopping_criteria = StoppingCriteriaList([StoppingCriteriaSub(
+            stops=[torch.tensor([i]).to(self.device) for i in stop_words_ids])])
+
+        # Use pre-extracted EVA features
+        img_embeds, atts_img = self.encode_img_with_preextracted_eva(
+            eva_features.to(self.device), video_features.to(self.device))
+
+        image_lists = [[image_emb[None]] for image_emb in img_embeds]
+
+        batch_embs = [self.get_context_emb(text, img_list) for text, img_list in zip(texts, image_lists)]
+
+        batch_size = len(batch_embs)
+        max_len = max([emb.shape[1] for emb in batch_embs])
+        emb_dim = batch_embs[0].shape[2]
+        dtype = batch_embs[0].dtype
+        device = batch_embs[0].device
+
+        embs = torch.zeros([batch_size, max_len, emb_dim], dtype=dtype, device=device)
+        attn_mask = torch.zeros([batch_size, max_len], dtype=torch.int, device=device)
+        for i, emb in enumerate(batch_embs):
+            emb_len = emb.shape[1]
+            embs[i, -emb_len:] = emb[0]
+            attn_mask[i, -emb_len:] = 1
+
+        with self.maybe_autocast():
+            outputs = self.llama_model.generate(
+                inputs_embeds=embs,
+                attention_mask=attn_mask,
+                max_new_tokens=max_new_tokens,
+                num_beams=num_beams,
+                length_penalty=length_penalty,
+                temperature=temperature,
+                do_sample=do_sample,
+                min_length=min_length,
+                top_p=top_p,
+                repetition_penalty=repetition_penalty,
+            )
+
         answers = []
         for output_token in outputs:
             if output_token[0] == 0:

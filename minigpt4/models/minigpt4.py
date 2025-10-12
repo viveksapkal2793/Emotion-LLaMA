@@ -143,6 +143,44 @@ class MiniGPT4(MiniGPTBase):
                 inputs_llama = self.llama_proj(image_embeds)
             atts_llama = torch.ones(inputs_llama.size()[:-1], dtype=torch.long).to(image.device)
         return inputs_llama, atts_llama
+    
+    def encode_img_with_preextracted_eva(self, eva_features):
+        """
+        Process pre-extracted EVA-ViT features instead of raw images
+        
+        Args:
+            eva_features: [B, 1025, 1408] - Pre-extracted EVA-ViT features
+        """
+        device = eva_features.device
+        
+        with self.maybe_autocast():
+            # Skip visual_encoder, use pre-extracted EVA features directly
+            image_embeds = self.ln_vision(eva_features).to(device)   # [B, 1025, 1408]
+            
+            if self.has_qformer:
+                # Use Q-Former processing (same as original)
+                image_atts = torch.ones(image_embeds.size()[:-1], dtype=torch.long).to(device)
+
+                query_tokens = self.query_tokens.expand(image_embeds.shape[0], -1, -1)
+                query_output = self.Qformer.bert(
+                    query_embeds=query_tokens,
+                    encoder_hidden_states=image_embeds,
+                    encoder_attention_mask=image_atts,
+                    return_dict=True,
+                )
+
+                inputs_llama = self.llama_proj(query_output.last_hidden_state)
+            else:
+                # Direct projection without Q-Former (same as original)
+                image_embeds = image_embeds[:, 1:, :]       # Remove CLS token [B, 1024, 1408]
+                bs, pn, hs = image_embeds.shape             
+                image_embeds = image_embeds.view(bs, int(pn / 4), int(hs * 4))  # [B, 256, 5632]
+
+                inputs_llama = self.llama_proj(image_embeds)    # [B, 256, 4096]
+                
+            atts_llama = torch.ones(inputs_llama.size()[:-1], dtype=torch.long).to(device)
+            
+        return inputs_llama, atts_llama
 
     @classmethod
     def from_config(cls, cfg):

@@ -5,8 +5,10 @@ model:
   end_sym: "</s>"
   low_resource: False
   prompt_template: '[INST] {} [/INST]'
-  llama_model: "/home/user/project/Emotion-LLaMA/checkpoints/Llama-2-7b-chat-hf"
-  ckpt: "/home/user/project/Emotion-LLaMA/checkpoints/save_checkpoint/stage2/checkpoint_best.pth"
+  # llama_model: "/home/user/project/Emotion-LLaMA/checkpoints/Llama-2-7b-chat-hf"
+  llama_model: "D:\\Acads\\BTP\\Emotion-LLaMA\\checkpoints\\Llama-2-7b-chat-hf"  # CHANGE: Windows path
+  # ckpt: "/home/user/project/Emotion-LLaMA/checkpoints/save_checkpoint/stage2/checkpoint_best.pth"
+  ckpt: "D:\\Acads\\BTP\\Emotion-LLaMA\\checkpoints\\checkpoint_best.pth"        # CHANGE: Windows path
   lora_r: 64
   lora_alpha: 16
 
@@ -40,7 +42,13 @@ evaluation_datasets:
     max_new_tokens: 500
     batch_size: 1  
 
+  meld_caption:
+    eval_file_path: "D:\\Acads\\BTP\\MELD\\MELD.Raw\\test_sent_emo.csv"
+    img_path: "D:\\Acads\\BTP\\MELD\\MELD.VideoFrames"
+    max_new_tokens: 500
+    batch_size: 1
+
 run:
   task: image_text_pretrain
   name: minigptv2_evaluation
-  save_path: /home/user/project/Emotion-LLaMA/results
+  save_path: "D:\\Acads\\BTP\\Emotion-LLaMA\\results"
