@@ -64,7 +64,7 @@ class MELDDataset(Dataset):
         print("MELD ann_path: ", ann_path)
         self.ann_path = ann_path
         self.file_path = os.path.dirname(ann_path)
-        self.feat_path = "D:\\Acads\\BTP\\MELD\\MELD.VideoFrames"
+        self.feat_path = "/scratch/data/bikash_rs/vivek/dataset/Meld_feat_ext"
         
         # Read CSV file instead of text file
         self.meld_data = pd.read_csv(ann_path)

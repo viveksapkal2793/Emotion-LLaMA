@@ -12,7 +12,8 @@ model:
   prompt: ""
 
   # llama_model: "/home/user/project/Emotion-LLaMA/checkpoints/Llama-2-7b-chat-hf"
-  llama_model: "D:\\Acads\\BTP\\Emotion-LLaMA\\checkpoints\\Llama-2-7b-chat-hf"  # CHANGE: Windows path
+  # llama_model: "D:\\Acads\\BTP\\Emotion-LLaMA\\checkpoints\\Llama-2-7b-chat-hf"  # CHANGE: Windows path
+  llama_model: /scratch/data/bikash_rs/vivek/Emotion-LLaMA/checkpoints/Llama-2-7b-chat-hf
   lora_r: 64
   lora_alpha: 16
 
