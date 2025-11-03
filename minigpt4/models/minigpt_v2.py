@@ -153,6 +153,31 @@ class MiniGPTv2(MiniGPTBase):
             
         return inputs_llama, atts_llama
 
+    def encode_video_features_only(self, video_features):
+        """
+        Process only video features (FaceMAE, VideoMAE, Audio) without EVA-ViT
+        
+        Args:
+            video_features: [B, 3, 1024] - Multimodal features (FaceMAE, VideoMAE, Audio)
+        """
+        device = video_features.device
+        
+        with self.maybe_autocast():
+            # Process the 3 feature modalities directly
+            video_features = video_features.to(device)   # [B, 3, 1024]
+            video_features_split = torch.split(video_features, 1, dim=1)
+            
+            # Project each feature to LLaMA space
+            output1 = self.feats_llama_proj1(video_features_split[0].squeeze(1))  # [B, 4096]
+            output2 = self.feats_llama_proj2(video_features_split[1].squeeze(1))  # [B, 4096]
+            output3 = self.feats_llama_proj3(video_features_split[2].squeeze(1))  # [B, 4096]
+            video_feats = torch.stack([output1, output2, output3], dim=1)         # [B, 3, 4096]
+            
+            # Create attention mask
+            atts_llama = torch.ones(video_feats.size()[:-1], dtype=torch.long).to(device)  # [B, 3]
+            
+        return video_feats, atts_llama
+
     @classmethod
     def from_config(cls, cfg):
         vit_model = cfg.get("vit_model", "eva_clip_g")
