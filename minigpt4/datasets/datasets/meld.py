@@ -38,12 +38,9 @@ class MELDDataset(Dataset):
             "Provide an analysis of the expressions and tone featured in the video.",
         ]
 
+        # Match MER2024 emotion instruction format exactly
         self.emotion_instruction_pool = [
-            "Please determine which emotion label in the video represents: neutral, anger, joy, sadness, fear, surprise, disgust.",
-            "Identify the displayed emotion in the video: is it neutral, anger, joy, sadness, fear, surprise, or disgust?",
-            "Determine the emotional state shown in the video, choosing from neutral, anger, joy, sadness, fear, surprise, or disgust.",
-            "Please ascertain the specific emotion portrayed in the video, whether it be neutral, anger, joy, sadness, fear, surprise, or disgust.",
-            "Assess and label the emotion evident in the video: could it be neutral, anger, joy, sadness, fear, surprise, or disgust?",
+            "Please determine which emotion label in the video represents: happy, sad, neutral, angry, worried, surprise, fear, contempt.",
         ]
 
         self.reason_instruction_pool = [
@@ -54,11 +51,9 @@ class MELDDataset(Dataset):
             "Could you describe the emotion-related features of the individual in the video? What emotional category do they fall into?",
         ]
 
-        # Add all task types like first_face.py
+        # Match MER2024 task pool exactly
         self.task_pool = [
            "emotion",
-        #    "reason",
-        #    "reason_v2",
         ]
 
         print("MELD ann_path: ", ann_path)
@@ -70,14 +65,32 @@ class MELDDataset(Dataset):
         self.meld_data = pd.read_csv(ann_path)
         print(f'MELD video number: {len(self.meld_data)}')
 
-        # MELD emotions (7 classes)
+        # MELD emotions (7 classes) - keep original for ground truth
         emos = ['neutral', 'anger', 'joy', 'sadness', 'fear', 'surprise', 'disgust']
-
         self.emo2idx, self.idx2emo = {}, {}
         for ii, emo in enumerate(emos): 
             self.emo2idx[emo] = ii
         for ii, emo in enumerate(emos): 
             self.idx2emo[ii] = emo
+
+        # MER2024 emotions for model prediction
+        self.mer_emotions = ['neutral', 'angry', 'happy', 'sad', 'worried', 'surprise']
+
+        # Create emotion mapping from MER2024 to MELD
+        # self.mer_to_meld_mapping = {
+        #     'neutral': 'neutral',
+        #     'angry': 'anger', 
+        #     'happy': 'joy',
+        #     'sad': 'sadness',
+        #     'worried': 'fear',  # Map worried to fear (closest match)
+        #     'surprise': 'surprise',
+        #     # Add reverse mapping for any edge cases
+        #     'anger': 'anger',
+        #     'joy': 'joy', 
+        #     'sadness': 'sadness',
+        #     'fear': 'fear',
+        #     'disgust': 'disgust'
+        # }
 
         # # Keep the same JSON files for reasoning tasks (same as first_face.py)
         # json_file_path = "/home/user/selected_face/face_emotion/MERR_coarse_grained.json" 
@@ -112,9 +125,7 @@ class MELDDataset(Dataset):
         
         # Extract information from CSV
         utterance = row['Utterance']
-        # speaker = row['Speaker'] 
-        emotion_label = row['Emotion'].lower()  # Convert to lowercase to match our emotion set
-        # sentiment = row['Sentiment']
+        emotion_label = row['Emotion'].lower()  # Keep original MELD emotion
         dialogue_id = row['Dialogue_ID']
         utterance_id = row['Utterance_ID']
         
@@ -133,43 +144,45 @@ class MELDDataset(Dataset):
         
         video_features = torch.cat((FaceMAE_feats, VideoMAE_feats, Audio_feats), dim=0)
 
-        # Random task selection (same logic as first_face.py)
+        # Random task selection
         task = random.choice(self.task_pool)
+        
         if task == "emotion":
-            caption = emotion_label  # Use emotion label from CSV
+            # Keep original MELD emotion for now - mapping will happen in eval_emotion.py
+            caption = emotion_label  # Original MELD emotion
             caption = self.text_processor(caption)
-            instruction_pool = self.emotion_instruction_pool
-        elif task == "reason":
-            # Use MERR reasoning data (same as first_face.py)
-            caption = self.MERR_coarse_grained_dict[video_name]['caption']
-            caption = self.text_processor(caption)
-            instruction_pool = self.reason_instruction_pool
-        elif task == "reason_v2":
-            # Use MERR fine-grained reasoning data (same as first_face.py)
-            caption = self.MERR_fine_grained_dict[video_name]['smp_reason_caption']
-            caption = self.text_processor(caption)
-            instruction_pool = self.reason_instruction_pool
+            instruction_pool = self.emotion_instruction_pool  # This still asks for MER emotions
 
         emotion = self.emo2idx.get(emotion_label, 0)  # Default to neutral if not found
-         
-        # Use transcript from CSV directly (no need for separate CSV lookup)
+        
+        # Use transcript from CSV directly
         sentence = utterance
         character_line = f"The person in video says: {sentence}. "
         
         instruction = "<video><VideoHere></video> <feature><FeatureHere></feature> {} [{}] {} ".format(
             character_line, task, random.choice(instruction_pool))
 
+        # return {
+        #     "eva_features": EVA_feats,           # Pre-extracted EVA features [1025, 1408]
+        #     "video_features": video_features,    # Other modalities [3, 1024]
+        #     "instruction_input": instruction,
+        #     "answer": caption,
+        #     "emotion": emotion,
+        #     "image_id": video_name,
+        #     # "speaker": speaker,                  # Additional MELD info
+        #     # "sentiment": sentiment,              # Additional MELD info
+        #     # "dialogue_id": dialogue_id,          # Additional MELD info
+        #     # "utterance_id": utterance_id         # Additional MELD info
+        # }
+
         return {
-            "eva_features": EVA_feats,           # Pre-extracted EVA features [1025, 1408]
-            "video_features": video_features,    # Other modalities [3, 1024]
+            "eva_features": EVA_feats,           
+            "video_features": video_features,    
             "instruction_input": instruction,
-            "answer": caption,
-            "emotion": emotion,
+            "answer": caption,  # Original MELD emotion (will be ignored)
+            "emotion": emotion, # Original MELD emotion index
+            "original_emotion": emotion_label,  # Original MELD emotion string
             "image_id": video_name,
-            # "speaker": speaker,                  # Additional MELD info
-            # "sentiment": sentiment,              # Additional MELD info
-            # "dialogue_id": dialogue_id,          # Additional MELD info
-            # "utterance_id": utterance_id         # Additional MELD info
         }
 
     def get(self, video_name):
