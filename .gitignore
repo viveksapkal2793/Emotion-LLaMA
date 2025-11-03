@@ -9,7 +9,7 @@ checkpoints/checkpoint_best.pth
 checkpoints/Emoation_LLaMA.pth
 checkpoints/Llama-2-7b-chat-hf/
 logs/
-
+checkpoints/MER2024-best.pth
 # Python cache files and directories
 __pycache__/
 *.py[cod]
