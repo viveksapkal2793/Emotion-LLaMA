@@ -160,6 +160,66 @@ if 'mer2024_caption' in args.dataset:
     cm = confusion_matrix(targets_list, answers_list)
     print(cm)
 
+if 'mer2024_caption_wo_eva' in args.dataset:
+    eval_file_path = cfg.evaluation_datasets_cfg["mer2024_caption"]["eval_file_path"]
+    img_path = cfg.evaluation_datasets_cfg["mer2024_caption"]["img_path"]
+    batch_size = cfg.evaluation_datasets_cfg["mer2024_caption"]["batch_size"]
+    max_new_tokens = cfg.evaluation_datasets_cfg["mer2024_caption"]["max_new_tokens"]
+    print("MER2024 eval_file_path:", eval_file_path)
+    print("MER2024 img_path:", img_path)
+    print("MER2024 batch_size:", batch_size)
+    print("MER2024 max_new_tokens:", max_new_tokens)
+
+    data = MER2024Dataset(vis_processor, text_processor, img_path, eval_file_path)
+    eval_dataloader = DataLoader(data, batch_size=batch_size, shuffle=False)
+
+    targets_list = []  
+    answers_list = [] 
+    names_list = []
+    
+    for batch in eval_dataloader:
+        # Skip image processing - only use video features
+        instruction_input = batch['instruction_input']
+        targets = batch['answer']
+        video_features = batch['video_features']  # [B, 3, 1024]
+
+        texts = prepare_texts(instruction_input, conv_temp)
+        
+        # Use the new method that doesn't require EVA features
+        answers = model.generate_with_video_features_only(
+            video_features, 
+            texts, 
+            max_new_tokens=max_new_tokens, 
+            do_sample=False
+        )
+        
+        for j in range(len(answers)):
+            answers[j] = answers[j].split(" ")[-1].lower().strip()
+            targets[j] = targets[j].split(" ")[-1].lower().strip()
+            
+            if answers[j] not in ['neutral', 'angry', 'happy', 'sad', 'worried', 'surprise']:
+                print("Error: ", answers[j], " Target:", targets[j])
+                answers[j] = 'neutral'
+        
+        targets_list.extend(targets)  
+        answers_list.extend(answers)
+        names_list.extend(batch['image_id'])
+
+    accuracy = accuracy_score(targets_list, answers_list)
+    precision = precision_score(targets_list, answers_list, average='weighted')
+    recall = recall_score(targets_list, answers_list, average='weighted')
+    f1 = f1_score(targets_list, answers_list, average='weighted')
+
+    print("MER2024 Results:")
+    print("Accuracy:", accuracy)
+    print("Precision:", precision)
+    print("Recall:", recall)
+    print("F1 Score:", f1)
+
+    cm = confusion_matrix(targets_list, answers_list)
+    print("MER2024 Confusion Matrix:")
+    print(cm)
+
 if 'meld_caption' in args.dataset:
     eval_file_path = cfg.evaluation_datasets_cfg["meld_caption"]["eval_file_path"]
     img_path = cfg.evaluation_datasets_cfg["meld_caption"]["img_path"]
@@ -173,31 +233,50 @@ if 'meld_caption' in args.dataset:
     data = MELDDataset(vis_processor, text_processor, img_path, eval_file_path)
     eval_dataloader = DataLoader(data, batch_size=batch_size, shuffle=False)
 
+    def map_mer_to_meld(mer_emotion):
+        """Map MER emotions to MELD emotions"""
+        mapping = {
+            'neutral': 'neutral',
+            'angry': 'anger', 
+            'happy': 'joy',
+            'sad': 'sadness',
+            'worried': 'fear',
+            'surprise': 'surprise',
+            'fear': 'fear',
+            'disgust': 'disgust',
+            'contempt': 'disgust'  # Map contempt to disgust if it exists in MER
+        }
+        return mapping.get(mer_emotion.lower().strip(), 'neutral')
+        
     targets_list = []  
     answers_list = [] 
-    names_list   = []
+    names_list = []
+    
     for batch in eval_dataloader:
-        # MELD uses pre-extracted EVA features, not raw images
         eva_features = batch['eva_features']
         instruction_input = batch['instruction_input']
         targets = batch['answer']
         video_features = batch['video_features']
+        original_emotions = batch['original_emotion']
 
         texts = prepare_texts(instruction_input, conv_temp)
-        
-        # Need to modify model.generate to handle pre-extracted EVA features
-        # For now, we'll pass eva_features as a special parameter
-        # This requires model modification (see below)
         answers = model.generate_with_eva_features(eva_features, video_features, texts, 
                                                  max_new_tokens=max_new_tokens, do_sample=False)
         
         for j in range(len(answers)):
-            answers[j] = answers[j].split(" ")[-1]
-            targets[j] = targets[j].split(" ")[-1]
-            # MELD emotions: neutral, anger, joy, sadness, fear, surprise, disgust
+            # Extract predicted emotion and map to MELD
+            pred_emotion = answers[j].split(" ")[-1].lower().strip()
+            print("Raw predicted emotion:", pred_emotion)
+            mapped_emotion = map_mer_to_meld(pred_emotion)
+            print("Mapped emotion:", mapped_emotion)
+            answers[j] = mapped_emotion
+            
+            # Use original MELD emotion as target
+            targets[j] = original_emotions[j].lower().strip()
+            print("Original MELD emotion (target):", targets[j])
+            # Validate MELD emotions
             if answers[j] not in ['neutral', 'anger', 'joy', 'sadness', 'fear', 'surprise', 'disgust']:
-                print("MELD Error: ", answers[j], " Target:", targets[j])
-                answers[j] = 'neutral'  # Default to neutral for invalid predictions
+                answers[j] = 'neutral'
         
         targets_list.extend(targets)  
         answers_list.extend(answers)

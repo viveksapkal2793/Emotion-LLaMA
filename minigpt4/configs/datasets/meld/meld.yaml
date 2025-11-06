@@ -2,5 +2,5 @@ datasets:
   meld_caption:
     data_type: images
     build_info:
-      ann_path: "D://Acads//BTP//MELD//MELD.Raw//test_sent_emo.csv"
-      image_path: "D://Acads//BTP//MELD//MELD.Raw//output_repeated_splits_test"
+      ann_path: /scratch/data/bikash_rs/vivek/dataset/MELD.Raw/test_sent_emo.csv
+      image_path: /scratch/data/bikash_rs/vivek/dataset/Meld_feat_ext

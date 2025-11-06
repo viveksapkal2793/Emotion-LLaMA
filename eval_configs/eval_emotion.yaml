@@ -6,9 +6,11 @@ model:
   low_resource: False
   prompt_template: '[INST] {} [/INST]'
   # llama_model: "/home/user/project/Emotion-LLaMA/checkpoints/Llama-2-7b-chat-hf"
-  llama_model: "D:\\Acads\\BTP\\Emotion-LLaMA\\checkpoints\\Llama-2-7b-chat-hf"  # CHANGE: Windows path
+  # llama_model: "D:\\Acads\\BTP\\Emotion-LLaMA\\checkpoints\\Llama-2-7b-chat-hf"  # CHANGE: Windows path
+  llama_model: /scratch/data/bikash_rs/vivek/Emotion-LLaMA/checkpoints/Llama-2-7b-chat-hf
   # ckpt: "/home/user/project/Emotion-LLaMA/checkpoints/save_checkpoint/stage2/checkpoint_best.pth"
-  ckpt: "D:\\Acads\\BTP\\Emotion-LLaMA\\checkpoints\\checkpoint_best.pth"        # CHANGE: Windows path
+  # ckpt: "D:\\Acads\\BTP\\Emotion-LLaMA\\checkpoints\\checkpoint_best.pth"        # CHANGE: Windows path
+  ckpt: /scratch/data/bikash_rs/vivek/Emotion-LLaMA/checkpoints/MER2024-best.pth
   lora_r: 64
   lora_alpha: 16
 
@@ -37,18 +39,18 @@ evaluation_datasets:
     batch_size: 1
 
   mer2024_caption:
-    eval_file_path: /home/czb/big_space/datasets/Emotion/MER2024/MER2024-noise_NCE.txt # MER2024
+    eval_file_path: /scratch/data/bikash_rs/vivek/dataset/MER2024/reference-noise.csv # MER2024
     img_path: /home/czb/big_space/datasets/Emotion/MER2024/video-unlabeled-with-test2noise
     max_new_tokens: 500
     batch_size: 1  
 
   meld_caption:
-    eval_file_path: "D:\\Acads\\BTP\\MELD\\MELD.Raw\\test_sent_emo.csv"
-    img_path: "D:\\Acads\\BTP\\MELD\\MELD.VideoFrames"
+    eval_file_path: /scratch/data/bikash_rs/vivek/dataset/MELD.Raw/test_sent_emo.csv
+    img_path: /scratch/data/bikash_rs/vivek/dataset/Meld_feat_ext
     max_new_tokens: 500
     batch_size: 1
 
 run:
   task: image_text_pretrain
   name: minigptv2_evaluation
-  save_path: "D:\\Acads\\BTP\\Emotion-LLaMA\\results"
+  save_path: /scratch/data/bikash_rs/vivek/Emotion-LLaMA/results
