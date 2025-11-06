@@ -6,8 +6,9 @@ datasets/HL-UTT
 datasets/mae_340_UTT
 datasets/maeV_399_UTT
 checkpoints/checkpoint_best.pth
-checkpoints/Emoation_LLaMA.pth
+checkpoints/Emotion_LLaMA.pth
 checkpoints/Llama-2-7b-chat-hf/
+checkpoints/MER2024-best.pth
 
 # Python cache files and directories
 __pycache__/
